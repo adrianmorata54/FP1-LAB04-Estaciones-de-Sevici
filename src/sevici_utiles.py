@@ -1,4 +1,5 @@
 from collections import namedtuple
+from math import sqrt
 
 EstacionSevici = namedtuple("EstacionSevici", 
     "nombre, direccion, latitud, longitud, capacidad, puestos_libres, bicicletas_disponibles")
@@ -77,8 +78,17 @@ def busca_estaciones_con_disponibilidad(estaciones:list[EstacionSevici], min_dis
     lista de EstacionSevici
     """
     # TODO: Ejercicio 4
-    return estaciones
+    lista = []
+    for e in estaciones:
+        if e.capacidad == 0:
+            porcentaje = 0.0
+        else:
+            porcentaje = e.bicicletas_disponibles/e.capacidad
+        if min_disponibilidad < porcentaje:
+            lista.append(e)
+    return lista
 
+ 
 def calcula_distancia(p1: tuple[float, float], p2: tuple[float, float]) -> float:
     """
     Calcula la distancia euclídea entre dos puntos (latitud, longitud).
@@ -91,7 +101,9 @@ def calcula_distancia(p1: tuple[float, float], p2: tuple[float, float]) -> float
     float: distancia euclídea entre los dos puntos
     """
     # TODO: Ejercicio 5
-    pass
+    distancia = sqrt((p2[0]- p1[0])**2 + (p2[1]- p1[1])**2)
+    return distancia
+    
 
 def busca_estacion_mas_cercana(estaciones:list[EstacionSevici], punto:tuple[float, float]) -> EstacionSevici | None:
     """
@@ -105,7 +117,20 @@ def busca_estacion_mas_cercana(estaciones:list[EstacionSevici], punto:tuple[floa
     EstacionSevici más cercana con al menos una bicicleta disponible, o None si no hay ninguna.
     """ 
     # TODO: Ejercicio 5
-    return None
+    resultado = []
+    for e in estaciones:
+        if e.bicicletas_disponibles == 0:
+            pass
+        elif resultado == []:
+            resultado.append(e)
+        elif calcula_distancia([resultado[0].latitud, resultado[0].longitud], punto) > calcula_distancia([e.latitud, e.longitud], punto):
+            resultado = [e]
+        else:
+            pass
+    if resultado == []:
+        return None
+    else:
+        return resultado
 
 def calcula_ruta(estaciones:list[EstacionSevici], origen:tuple[float, float], destino:tuple[float, float]) -> tuple[EstacionSevici | None, EstacionSevici | None]   :
     """
