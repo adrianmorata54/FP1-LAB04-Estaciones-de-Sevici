@@ -42,7 +42,10 @@ def calcula_estadisticas(estaciones: list[EstacionSevici]) -> tuple[int, int, fl
     for e in estaciones:
         total_bicis_libres += e.bicicletas_disponibles
         total_capacidad += e.capacidad
-    porcentaje_ocupacion = (1-total_bicis_libres/total_capacidad)*100
+    if total_capacidad == 0:
+        porcentaje_ocupacion = 0.0
+    else:
+        porcentaje_ocupacion = (1-total_bicis_libres/total_capacidad)*100
     return (total_bicis_libres, total_capacidad, porcentaje_ocupacion, total_estaciones)
 
 def busca_estaciones_direccion(estaciones: list[EstacionSevici], direccion_parcial: str) -> list[EstacionSevici]:
@@ -59,7 +62,7 @@ def busca_estaciones_direccion(estaciones: list[EstacionSevici], direccion_parci
     # TODO: Ejercicio 3
     lista = list()
     for e in estaciones:
-    
+        direccion_parcial = str(direccion_parcial)
         if direccion_parcial in e.direccion or direccion_parcial in e.direccion.lower():
             lista.append(e)
     return lista
@@ -117,20 +120,17 @@ def busca_estacion_mas_cercana(estaciones:list[EstacionSevici], punto:tuple[floa
     EstacionSevici más cercana con al menos una bicicleta disponible, o None si no hay ninguna.
     """ 
     # TODO: Ejercicio 5
-    resultado = []
+    mejor_estacion = None
+    mejor_dist = None
     for e in estaciones:
-        if e.bicicletas_disponibles == 0:
-            pass
-        elif resultado == []:
-            resultado.append(e)
-        elif calcula_distancia([resultado[0].latitud, resultado[0].longitud], punto) > calcula_distancia([e.latitud, e.longitud], punto):
-            resultado = [e]
-        else:
-            pass
-    if resultado == []:
-        return None
-    else:
-        return resultado
+        if e.bicicletas_disponibles <= 0:
+            continue
+        d = calcula_distancia((e.latitud, e.longitud), punto)
+        if mejor_estacion is None or d < mejor_dist:
+            mejor_estacion = e
+            mejor_dist = d
+    return mejor_estacion
+
 
 def calcula_ruta(estaciones:list[EstacionSevici], origen:tuple[float, float], destino:tuple[float, float]) -> tuple[EstacionSevici | None, EstacionSevici | None]   :
     """
@@ -145,5 +145,8 @@ def calcula_ruta(estaciones:list[EstacionSevici], origen:tuple[float, float], de
     tupla con (estacion_origen, estacion_destino)
     """
     # TODO: Ejercicio 5
-    pass
+    posibilidades = busca_estaciones_con_disponibilidad(estaciones, 0.00000001)
+    estacion_final = busca_estacion_mas_cercana(posibilidades, destino)
+    estacion_origen = busca_estacion_mas_cercana(posibilidades, origen)
+    return [estacion_origen, estacion_final]
 

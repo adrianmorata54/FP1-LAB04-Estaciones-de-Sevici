@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <style>
+        .sevici-refresh-btn {
+            position: absolute; bottom: 12px; right: 12px; z-index: 9999;
+            background: white; border: 1px solid #ccc; border-radius: 6px;
+            padding: 8px 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            cursor: pointer; font-family: system-ui, sans-serif; font-size: 14px;
+        }
+        .sevici-refresh-btn:hover { background: #f5f5f5; }
+        .sevici-controls-container {
+            position: absolute; bottom: 12px; left: 12px; z-index: 9999;
+            background: white; border: 1px solid #ccc; border-radius: 6px;
+            padding: 8px 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            font-family: system-ui, sans-serif; font-size: 14px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .sevici-controls-container label { white-space: nowrap; }
+        .sevici-controls-container input[type=range] { width: 150px; }
+        .sevici-stats-panel {
+            position: absolute; top: 100px; left: 12px; z-index: 9999;
+            background: white; border: 1px solid #ccc; border-radius: 6px;
+            padding: 8px 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            font-family: system-ui, sans-serif; font-size: 14px;
+        }
+        .sevici-stats-panel h4 { margin: 0 0 5px 0; padding: 0; }
+        .sevici-stats-panel p { margin: 3px 0; padding: 0; }
+        .sevici-search-container {
+            position: absolute; top: 12px; right: 100px; z-index: 9999;
+            background: white; border: 1px solid #ccc; border-radius: 6px;
+            padding: 8px 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            font-family: system-ui, sans-serif; font-size: 14px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .sevici-search-container input {
+            border: 1px solid #ccc; padding: 4px; border-radius: 4px;
+        }
+        .sevici-search-container button {
+            padding: 4px 10px; cursor: pointer;
+        }
+        .sevici-route-container {
+            position: absolute; top: 12px; left: 12px; z-index: 9999;
+            background: white; border: 1px solid #ccc; border-radius: 6px;
+            padding: 8px 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            font-family: system-ui, sans-serif; font-size: 14px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .sevici-route-container button { padding: 4px 10px; cursor: pointer; }
+        #route-status { font-style: italic; color: #555; }
+        #clear-route-btn { display: none; } /* Oculto por defecto */
+    </style>
+    <script>
+        let routeMode = false;
+        let originPoint = null;
+        let map = null;
+
+        function reloadMap(htmlContent) {
+            document.open();
+            document.write(htmlContent);
+            document.close();
+            setTimeout(initializeMapInteraction, 200);
+        }
+
+        function initializeMapInteraction() {
+            map = window.map_d215a81b7db385ee7f6576fcde77a6bc;
+            if (map) {
+                map.on('click', function(e) {
+                    if (!routeMode) return;
+                    
+                    if (!originPoint) {
+                        originPoint = e.latlng;
+                        document.getElementById('route-status').innerText = 'Origen seleccionado. Haz clic para el destino.';
+                    } else {
+                        const destinationPoint = e.latlng;
+                        document.getElementById('route-status').innerText = 'Calculando ruta...';
+                        seviciPlanRoute([originPoint.lat, originPoint.lng], [destinationPoint.lat, destinationPoint.lng]);
+                        toggleRouteMode(false);
+                    }
+                });
+            } else {
+                setTimeout(initializeMapInteraction, 100);
+            }
+        }
+
+        setTimeout(initializeMapInteraction, 200);
+
+        function seviciRefresh(){
+            if (window.pywebview && window.pywebview.api){
+                window.pywebview.api.refresh().then(function(result){
+                    if(result.ok){ reloadMap(result.html); } 
+                    else { alert('Error: ' + result.error); }
+                }).catch(function(err){ alert('Error en llamada: ' + err); });
+            } else { alert('Interfaz pywebview no disponible.'); }
+        }
+
+        function updateSliderValue(value) {
+            document.getElementById('slider-value').textContent = value;
+        }
+        
+        function seviciApplyFilters() {
+            if (!window.pywebview || !window.pywebview.api || !map) {
+                alert('Interfaz pywebview o mapa no disponible.'); return;
+            }
+            const zoom = map.getZoom();
+            const center = map.getCenter();
+            const searchValue = document.getElementById('address-search-input').value;
+            const sliderValue = document.getElementById('availability-slider').value;
+
+            window.pywebview.api.apply_filters(searchValue, sliderValue, zoom, [center.lat, center.lng]).then(function(result){
+                if(result.ok){ reloadMap(result.html); } 
+                else { alert('Error: ' + result.error); }
+            }).catch(function(err){ alert('Error en llamada: ' + err); });
+        }
+
+        function handleSearchKey(event) {
+            if (event.key === 'Enter') { seviciApplyFilters(); }
+        }
+
+        function toggleRouteMode(forceState) {
+            routeMode = (forceState !== undefined) ? forceState : !routeMode;
+            const routeBtn = document.getElementById('route-btn');
+            const routeStatus = document.getElementById('route-status');
+            const mapContainer = map ? map.getContainer() : null;
+
+            if (routeMode) {
+                originPoint = null;
+                routeBtn.style.backgroundColor = '#28a745';
+                routeBtn.style.color = 'white';
+                routeStatus.innerText = 'Haz clic en el mapa para seleccionar el origen.';
+                if(mapContainer) mapContainer.style.cursor = 'crosshair';
+            } else {
+                routeBtn.style.backgroundColor = '';
+                routeBtn.style.color = '';
+                routeStatus.innerText = '';
+                if(mapContainer) mapContainer.style.cursor = '';
+            }
+        }
+
+        function seviciPlanRoute(origin, destination) {
+             if (!window.pywebview || !window.pywebview.api || !map) {
+                alert('Interfaz pywebview o mapa no disponible.'); return;
+            }
+            const zoom = map.getZoom();
+            const center = map.getCenter();
+            const searchValue = document.getElementById('address-search-input').value;
+            const sliderValue = document.getElementById('availability-slider').value;
+
+            window.pywebview.api.plan_route(origin, destination, searchValue, sliderValue, zoom, [center.lat, center.lng]).then(function(result){
+                if(result.ok){ reloadMap(result.html); } 
+                else { alert('Error al calcular la ruta: ' + result.error); }
+            }).catch(function(err){ alert('Error en llamada: ' + err); });
+        }
+
+        function seviciClearRoute() {
+             if (!window.pywebview || !window.pywebview.api || !map) {
+                alert('Interfaz pywebview o mapa no disponible.'); return;
+            }
+            const zoom = map.getZoom();
+            const center = map.getCenter();
+            const searchValue = document.getElementById('address-search-input').value;
+            const sliderValue = document.getElementById('availability-slider').value;
+            
+            window.pywebview.api.clear_route(searchValue, sliderValue, zoom, [center.lat, center.lng]).then(function(result){
+                if(result.ok){ reloadMap(result.html); }
+                else { alert('Error al limpiar la ruta: ' + result.error); }
+            }).catch(function(err){ alert('Error en llamada: ' + err); });
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_d215a81b7db385ee7f6576fcde77a6bc {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+
+            <style>html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            </style>
+
+            <style>#map {
+                position:absolute;
+                top:0;
+                bottom:0;
+                right:0;
+                left:0;
+                }
+            </style>
+
+            <script>
+                L_NO_TOUCH = false;
+                L_DISABLE_3D = false;
+            </script>
+
+        
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.1.0/leaflet.markercluster.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.1.0/MarkerCluster.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.1.0/MarkerCluster.Default.css"/>
+</head>
+<body>
+    
+    <div class="sevici-refresh-btn" onclick="seviciRefresh()">⟳ Refrescar</div>
+    
+    <div class="sevici-controls-container">
+        <label for="availability-slider">Disponibilidad Mínima: <span id="slider-value">0</span>%</label>
+        <input type="range" min="0" max="100" value="0" id="availability-slider" 
+               oninput="updateSliderValue(this.value)" onchange="seviciApplyFilters()">
+    </div>
+    
+    
+        <div class="sevici-stats-panel">
+            <h4>Estadísticas (Vista Actual)</h4>
+            <p><b>Estaciones mostradas:</b> 0</p>
+            <p><b>Bicicletas disponibles:</b> 0</p>
+            <p><b>Capacidad total:</b> 0</p>
+            <p><b>Ocupación:</b> 0.0%</p>
+        </div>
+        
+    
+    <div class="sevici-search-container">
+        <label for="address-search-input">Buscar Dirección:</label>
+        <input type="search" id="address-search-input" value="Calle Parque Sierra Norte" onkeydown="handleSearchKey(event)" placeholder="Ej: Av. Constitución">
+        <button onclick="seviciApplyFilters()">🔍</button>
+    </div>
+    
+    
+    <div class="sevici-route-container">
+        <button id="route-btn" onclick="toggleRouteMode()">🗺️ Planificar Ruta</button>
+        <button id="clear-route-btn" onclick="seviciClearRoute()" style="display: inline-block;">❌ Limpiar Ruta</button>
+        <span id="route-status"></span>
+    </div>
+    
+    
+            <div class="folium-map" id="map_d215a81b7db385ee7f6576fcde77a6bc" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_d215a81b7db385ee7f6576fcde77a6bc = L.map(
+                "map_d215a81b7db385ee7f6576fcde77a6bc",
+                {
+                    center: [37.374318018813966, -5.998143684253981],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  "zoom": 15,
+  "zoomControl": true,
+  "preferCanvas": false,
+}
+
+                }
+            );
+            L.control.scale().addTo(map_d215a81b7db385ee7f6576fcde77a6bc);
+
+            
+
+        
+    
+            var tile_layer_59600c08b707045c846d2d0f67cd0d5b = L.tileLayer(
+                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {
+  "minZoom": 0,
+  "maxZoom": 19,
+  "maxNativeZoom": 19,
+  "noWrap": false,
+  "attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_59600c08b707045c846d2d0f67cd0d5b.addTo(map_d215a81b7db385ee7f6576fcde77a6bc);
+        
+    
+            var marker_9421999be2e7bb970ad91591c706f15e = L.marker(
+                [37.421626, -5.971503],
+                {
+}
+            ).addTo(map_d215a81b7db385ee7f6576fcde77a6bc);
+        
+    
+            var icon_0cd3d8fadcb7fa6b1e1330bd265e1d69 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "play",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_e39379a599f8df4f9297dbdd3de26fd2 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_9548836ed9cf2e3b6c421f560fe19f74 = $(`<div id="html_9548836ed9cf2e3b6c421f560fe19f74" style="width: 100.0%; height: 100.0%;"><b>✅ Inicio Recomendado:</b><br>195_CALLE CORRAL DEL AGUA<br>Bicis: 9</div>`)[0];
+                popup_e39379a599f8df4f9297dbdd3de26fd2.setContent(html_9548836ed9cf2e3b6c421f560fe19f74);
+            
+        
+
+        marker_9421999be2e7bb970ad91591c706f15e.bindPopup(popup_e39379a599f8df4f9297dbdd3de26fd2)
+        ;
+
+        
+    
+    
+            marker_9421999be2e7bb970ad91591c706f15e.bindTooltip(
+                `<div>
+                     Coge tu bici aquí
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_9421999be2e7bb970ad91591c706f15e.setIcon(icon_0cd3d8fadcb7fa6b1e1330bd265e1d69);
+            
+    
+            var marker_28deeee3ca98dbcddeb1b6901e689505 = L.marker(
+                [37.368595, -6.003702],
+                {
+}
+            ).addTo(map_d215a81b7db385ee7f6576fcde77a6bc);
+        
+    
+            var icon_936ecee3d595b41b0dccdbd1fcb96371 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "red",
+  "iconColor": "white",
+  "icon": "flag-checkered",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_15fb3fba26c9b56ce6907a9105a6fc13 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_1d070633fa10117220da922d38fbaa10 = $(`<div id="html_1d070633fa10117220da922d38fbaa10" style="width: 100.0%; height: 100.0%;"><b>🏁 Fin Recomendado:</b><br>261_AVDA JUAN PABLO II<br>Sitios libres: 8</div>`)[0];
+                popup_15fb3fba26c9b56ce6907a9105a6fc13.setContent(html_1d070633fa10117220da922d38fbaa10);
+            
+        
+
+        marker_28deeee3ca98dbcddeb1b6901e689505.bindPopup(popup_15fb3fba26c9b56ce6907a9105a6fc13)
+        ;
+
+        
+    
+    
+            marker_28deeee3ca98dbcddeb1b6901e689505.bindTooltip(
+                `<div>
+                     Deja tu bici aquí
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_28deeee3ca98dbcddeb1b6901e689505.setIcon(icon_936ecee3d595b41b0dccdbd1fcb96371);
+            
+    
+            var poly_line_451652009fd30eb8ef81f9cc903fc73d = L.polyline(
+                [[37.421626, -5.971503], [37.368595, -6.003702]],
+                {"bubblingMouseEvents": true, "color": "#3498db", "dashArray": null, "dashOffset": null, "fill": false, "fillColor": "#3498db", "fillOpacity": 0.2, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "noClip": false, "opacity": 0.9, "smoothFactor": 1.0, "stroke": true, "weight": 5}
+            ).addTo(map_d215a81b7db385ee7f6576fcde77a6bc);
+        
+    
+            poly_line_451652009fd30eb8ef81f9cc903fc73d.bindTooltip(
+                `<div>
+                     Ruta en bicicleta recomendada
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var poly_line_b23b0e7a236c927560548dc58826f24a = L.polyline(
+                [[37.42320757799006, -5.972512376610036], [37.421626, -5.971503]],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": "5, 10", "dashOffset": null, "fill": false, "fillColor": "gray", "fillOpacity": 0.2, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "noClip": false, "opacity": 0.8, "smoothFactor": 1.0, "stroke": true, "weight": 3}
+            ).addTo(map_d215a81b7db385ee7f6576fcde77a6bc);
+        
+    
+            poly_line_b23b0e7a236c927560548dc58826f24a.bindTooltip(
+                `<div>
+                     Camino a la estación de origen
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var poly_line_46492804566be02220ea354237e8393a = L.polyline(
+                [[37.368595, -6.003702], [37.37046413876843, -6.005879405681828]],
+                {"bubblingMouseEvents": true, "color": "gray", "dashArray": "5, 10", "dashOffset": null, "fill": false, "fillColor": "gray", "fillOpacity": 0.2, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "noClip": false, "opacity": 0.8, "smoothFactor": 1.0, "stroke": true, "weight": 3}
+            ).addTo(map_d215a81b7db385ee7f6576fcde77a6bc);
+        
+    
+            poly_line_46492804566be02220ea354237e8393a.bindTooltip(
+                `<div>
+                     Camino desde la estación de destino
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var marker_cluster_636a873971928010c90a12f26127ed2a = L.markerClusterGroup(
+                {
+}
+            );
+        
+    
+            marker_cluster_636a873971928010c90a12f26127ed2a.addTo(map_d215a81b7db385ee7f6576fcde77a6bc);
+        
+    
+            var layer_control_171d5d320c6c0641b53fa31a34164b2e_layers = {
+                base_layers : {
+                    "openstreetmap" : tile_layer_59600c08b707045c846d2d0f67cd0d5b,
+                },
+                overlays :  {
+                    "Estaciones" : marker_cluster_636a873971928010c90a12f26127ed2a,
+                },
+            };
+            let layer_control_171d5d320c6c0641b53fa31a34164b2e = L.control.layers(
+                layer_control_171d5d320c6c0641b53fa31a34164b2e_layers.base_layers,
+                layer_control_171d5d320c6c0641b53fa31a34164b2e_layers.overlays,
+                {
+  "position": "topright",
+  "collapsed": true,
+  "autoZIndex": true,
+}
+            ).addTo(map_d215a81b7db385ee7f6576fcde77a6bc);
+
+        
+</script>
+</html>
